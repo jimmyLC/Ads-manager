@@ -42,7 +42,7 @@ paths:
                   - $ref: '#/components/schemas/ServeResponse'
                   - $ref: '#/components/schemas/NoAdResponse'
         '404': { description: 版位不存在, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
-        '500': { description: 內部錯誤, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } } }
+        '500': { description: 內部錯誤, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
 
   /v1/asset/{assetId}:
     get:
@@ -69,7 +69,7 @@ paths:
         - { name: d, in: query, required: false, schema: { type: string, enum: [desktop, mobile], default: desktop } }
         - { name: country, in: query, required: false, schema: { type: string } }
         - { name: device, in: query, required: false, schema: { type: string } }
-        - { name: placement, in: query, required: false, schema: { type: string }, description: site:slot，未知則記 unknown }
+        - { name: placement, in: query, required: false, schema: { type: string }, description: 'site:slot，未知則記 unknown' }
       responses:
         '302': { description: 轉向資料庫中的目標網址 }
         '404': { description: 素材或連結不存在 }
@@ -239,12 +239,22 @@ paths:
     get:
       tags: [admin]
       summary: 報表
+      description: |
+        欄位：day, site, placement, campaign_id, campaign_name, creative_id, creative_name,
+        advertiser_name, country, device, impressions, clicks, conversions, ctr, cvr, value, ecpm, currency
+
+        計算：ctr = clicks / impressions；cvr = conversions / clicks；
+        value = revenue/1000 × impressions（CPM，revenue 未填時視為 30）；ecpm = value / impressions × 1000。
       security: [{ sessionCookie: [] }]
       parameters:
         - { name: from, in: query, required: true, schema: { type: string, format: date } }
         - { name: to, in: query, required: true, schema: { type: string, format: date } }
-        - { name: groupBy, in: query, required: false, schema: { type: string, default: day,campaign,placement }, description: '逗號分隔：day,campaign,creative,placement,country,device' }
+        - { name: groupBy, in: query, required: false, schema: { type: string, default: day,campaign,placement }, description: '逗號分隔：day,campaign,creative,placement,country,device,site' }
         - { name: site, in: query, schema: { type: string } }
+        - { name: campaign_id, in: query, schema: { type: string } }
+        - { name: placement_id, in: query, schema: { type: string } }
+        - { name: country, in: query, schema: { type: string } }
+        - { name: device, in: query, schema: { type: string } }
       responses:
         '200': { description: OK, content: { application/json: { schema: { type: object } } } }
 
@@ -252,14 +262,20 @@ paths:
     get:
       tags: [admin]
       summary: 報表 CSV 匯出
+      description: 'UTF-8 含 BOM；串流輸出；檔名 ads-report_<from>_<to>_<groupBy>.csv；超過 50,000 列時回應含 X-Row-Count 標頭。'
       security: [{ sessionCookie: [] }]
       parameters:
         - { name: from, in: query, required: true, schema: { type: string, format: date } }
         - { name: to, in: query, required: true, schema: { type: string, format: date } }
         - { name: groupBy, in: query, schema: { type: string } }
+        - { name: site, in: query, schema: { type: string } }
+        - { name: campaign_id, in: query, schema: { type: string } }
+        - { name: placement_id, in: query, schema: { type: string } }
       responses:
         '200':
           description: CSV
+          headers:
+            X-Row-Count: { schema: { type: integer } }
           content:
             text/csv: { schema: { type: string } }
 
@@ -369,6 +385,9 @@ components:
         daily_impression_cap: { type: integer, nullable: true }
         target_impression: { type: integer, nullable: true }
         target_click: { type: integer, nullable: true }
+        revenue_type: { type: string, enum: [cpm, cpc, cpa] }
+        revenue: { type: number, default: 30, description: 'CPM 單價（TWD/1000 次曝光），不得低於 cpm_floor_twd（預設 30）' }
+        currency: { type: string, default: TWD }
         placements: { type: array, items: { type: string } }
         assets: { type: array, items: { $ref: '#/components/schemas/AssetRef' } }
 
@@ -390,6 +409,9 @@ components:
         daily_impression_cap: { type: integer, nullable: true }
         target_impression: { type: integer, nullable: true }
         target_click: { type: integer, nullable: true }
+        revenue_type: { type: string, enum: [cpm, cpc, cpa] }
+        revenue: { type: number, description: 'CPM 單價（TWD/1000 次曝光）；低於 cpm_floor_twd 會被拒' }
+        currency: { type: string, default: TWD }
         placements: { type: array, items: { type: string } }
         targeting:
           type: array

@@ -29,6 +29,10 @@ sudo mkdir -p /srv/ads/assets && sudo chown $USER:$USER /srv/ads/assets
 #    ADMIN_BOOTSTRAP_USER=admin
 #    ADMIN_BOOTSTRAP_PASSWORD=<隨機>
 #    ADMIN_TOTP_SECRET=<base32>     可留空，之後在後台啟用
+#    GA4_PROPERTY_ID_JAVIS=G-J8X3V9GXR4
+#    GA4_API_SECRET_JAVIS=<每個 data stream 各自的 API secret>
+#    GA4_PROPERTY_ID_JAVID=<javid 的 GA4 property>
+#    GA4_API_SECRET_JAVID=<...>
 ```
 
 ### 1.2 systemd
@@ -165,12 +169,27 @@ sqlite3 /tmp/restore_test.db "SELECT COUNT(*) FROM ad_counters;"
 
 ---
 
+## 4. 疑難排解：GA4 收不到廣告轉換事件
+
+1. **outbox 有沒有待送？** `SELECT ga4_status, COUNT(*) FROM conversions GROUP BY ga4_status;`
+   - `pending` 堆積 → flush 排程沒跑（檢查 `ads-maint.timer` 的每分鐘 flush 與 `journalctl -u ads-maint`）。
+   - `failed` → 看 `ga4_error` 欄位內容。
+2. **憑證對不對？** `GA4_API_SECRET_*` 是**每個 data stream 各自的** secret（GA4 後台「管理 → 資料串流 → API 金鑰」），不是 Property 層級的。換 stream 就會失效。
+3. **Property ID 對不對？** `settings.ga4_property_javis` / `ga4_property_javid`。
+4. **事件有送出但 GA4 看不到？**
+   - 自訂參數（`ad_campaign_id` / `ad_creative_id` / `ad_placement` / `ad_country` / `ad_tracker_id`）必須先在 GA4 **註冊為 event-scoped custom dimension** 才會出現在標準報表。
+   - `ad_conversion` 需在 GA4 後台**標記為 key event**。
+   - MP 事件不會即時出現在「即時」報表，且**地理維度會算在 VPS（赫辛基）** → 地理請看 `ad_country` 或我們自己的報表。
+5. **GA4 掛掉會影響投放嗎？** 不會。轉換先寫我們自己的 `conversions` 與 `ad_counters`，GA4 只是 outbox 副本（SPEC §5.4）。
+
+---
+
 ## 5. 例行作業
 
 | 週期 | 作業 |
 |---|---|
-| 每日 | 檢查 `/v1/health`、備份成功、昨日曝光數 |
-| 每週 | 素材備份；寄出週報；檢查失敗的排程（上架/下架） |
+| 每日 | 檢查 `/v1/health`、備份成功、昨日曝光數、GA4 outbox 是否積壓 |
+| 每週 | 素材備份；寄出週報（含 CSV 附件）；檢查失敗的排程（上架/下架） |
 | 每月 | 清 `sessions` 過期資料（自動）、`audit_log` 保留 180 天後清理、確認 TOTP 已啟用 |
 | 每季 | 還原演練；檢視已失效的 campaign（`ends_at` 已過但仍 active）並下架 |
 

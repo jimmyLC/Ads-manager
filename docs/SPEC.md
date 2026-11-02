@@ -134,7 +134,7 @@ advertisers ──1:N── campaigns ──1:N── creatives ──1:N── 
 | `sites` | 站點 | `id`（`javis`/`javid`）、`domain` |
 | `placements` | 版位與其尺寸規格 | `id`（`javis:watch-below`）、`width_desktop`/`height_desktop`、`width_mobile`/`height_mobile`、`aspect`（`16/5`） |
 | `advertisers` | 廣告主（house/friendly） | `kind` |
-| `campaigns` | 活動 | `status`（draft/active/paused/ended）、`weight`、`starts_at`/`ends_at`、`daily_impression_cap`、`target_impression`/`target_click`、`selection_strategy`、`bid_value`、`revenue_type`/`revenue` |
+| `campaigns` | 活動 | `status`（draft/active/paused/ended）、`weight`、`starts_at`/`ends_at`、`daily_impression_cap`、`target_impression`/`target_click`、`selection_strategy`、`bid_value`、`revenue_type`（預設 `cpm`）、`revenue`（TWD/1000 次曝光）、`currency`（預設 `TWD`） |
 | `targeting_rules` | 定向條件 | `dimension`（country/placement/device/hour/weekday/path）、`operator`（in/not_in/equals）、`value` |
 | `campaign_placements` | 活動↔版位 | composite PK |
 | `creatives` | 素材 | `kind`（image/native/html）、native 欄位（headline/body/cta_label/cta_url/logo/thumb）、`html`、`alt_text` |
@@ -212,7 +212,11 @@ advertisers ──1:N── campaigns ──1:N── creatives ──1:N── 
 
 - 多則廣告同版位 → 依 `weight` 加權隨機（v1 不做 CTR 最佳化、不做出價競價）。
 - `selection_strategy` 欄位保留；v1 僅允許 `weighted_random`。
-- `bid_value`、`revenue_type`、`revenue` 保留但不實作任何計價行為。
+- `revenue_type`、`revenue` **v1 已啟用記帳統計**：只影響報表欄位（value、eCPM），**完全不影響選稿**。
+  - **計價單位：CPM**（每 1000 次曝光的價值），**幣別 TWD（台幣）**。
+  - **最低值 30**：全域設定 `settings.cpm_floor_twd = 30`；建立廣告時 `revenue` 預填 30；後台驗證 `revenue ≥ cpm_floor_twd`，低於者拒收。未填 `revenue` 的舊資料一律視為 30（不產生 0 元）。
+  - `cpc` / `cpa` 保留可選（同一套報表計算），但預設與實際使用一律 CPM；`flat`（整段固定金額）v1 不支援。
+- `bid_value` 與 `selection_strategy='declared_value'` 仍保留不實作；未來若啟用競價，`revenue`（或 `bid_value`）即為底價，且不得低於 `cpm_floor_twd`。
 
 ---
 
@@ -291,6 +295,79 @@ Query：`site`（必填）、`slot`（必填）、`country`（可選，ISO-2 或
 | `POST` | `/api/admin/users` | 建立帳號（僅 admin） |
 | `GET` | `/api/admin/audit` | 稽核軌跡（僅 admin） |
 
+### 5.3 報表與匯出
+
+**API**
+
+| 端點 | 用途 |
+|---|---|
+| `GET /api/admin/stats?from=&to=&groupBy=&…` | JSON 報表 |
+| `GET /api/admin/stats.csv?from=&to=&groupBy=&…` | CSV 匯出（`Content-Disposition: attachment`） |
+
+**參數**
+
+- `from` / `to`（必填，日期）
+- `groupBy`（可逗號組合）：`day`、`campaign`、`creative`、`placement`、`country`、`device`、`site`
+- 篩選（選填）：`site`、`campaign_id`、`placement_id`、`country`、`device`
+
+**輸出欄位**
+
+```
+day, site, placement, campaign_id, campaign_name, creative_id, creative_name,
+advertiser_name, country, device,
+impressions, clicks, conversions, ctr, cvr, value, ecpm, currency
+```
+
+**計算定義**
+
+| 欄位 | 定義 |
+|---|---|
+| `ctr` | `clicks / impressions` |
+| `cvr` | `conversions / clicks` |
+| `value` | 依 `revenue_type`：`cpm` → `revenue / 1000 × impressions`；`cpc` → `revenue × clicks`；`cpa` → `revenue × conversions`；`flat` → v1 不支援。`revenue` 未填時視為 CPM 最低值 30 |
+| `ecpm` | `value / impressions × 1000` |
+| `currency` | 幣別，預設 `TWD` |
+
+**匯出實作要求**
+
+- CSV 串流輸出（不整份組在記憶體），UTF-8 **含 BOM**（Excel 直接開不亂碼）。
+- 檔名格式：`ads-report_<from>_<to>_<groupBy>.csv`（`groupBy` 以 `-` 連接）。
+- 超過 50,000 列時仍串流輸出，但回應標頭加 `X-Row-Count` 讓後台提示可改用較小範圍。
+- 後台 UI：日期範圍 + 篩選器 +「匯出 CSV」按鈕；單一廣告 / 單一版位可一鍵匯出該範圍。
+- 週報 email（§10.3）附上上一週的 CSV。
+
+### 5.4 GA4 整合（Measurement Protocol，server-to-server）
+
+**為什麼用 Measurement Protocol（MP）而不是 client gtag**
+
+- 兩站雖已有 GA4，但 `javid/docs/ADS-PLAN.md` 已載明「GA4 常被攔截器擋掉，只當輔助」。我們的 MP 事件由伺服器送出，**不受攔截器影響** → 廣告轉換數在 GA4 裡是可信的。
+- 廣告元件保持零第三方：我們的頁面**不插入任何 GA4 程式碼**。
+
+**事件設計**
+
+| 項目 | 值 |
+|---|---|
+| event name | `ad_conversion`（需在 GA4 後台標記為 key event） |
+| `client_id` | 合成固定值 `ads-manager-<site>` — **不是使用者識別碼**；副作用：GA4 的使用者數不會因廣告事件增加 |
+| `source` / `medium` | `ads-manager` / `ad`（填入 GA4 標準 acquisition 維度，可在「流量來源」報表看到） |
+| `campaign_id` / `campaign_name` | 活動 ID / 名稱 |
+| `content_id` / `item_id` | creative ID / placement（`site:slot`） |
+| `ad_country` | 國家碼（**我們自己判定**，比 GA4 由 IP 推斷可靠） |
+| `ad_tracker_id` | 追蹤器 ID |
+| `value` / `currency` | 有記帳時附上金額（TWD） |
+
+自訂參數 `ad_campaign_id` / `ad_creative_id` / `ad_placement` / `ad_country` / `ad_tracker_id` 需在 GA4 註冊為 **event-scoped custom dimension**，才能在標準報表使用（GA4 Standard 支援）。
+
+**傳送機制（outbox，不阻塞請求）**
+
+1. 收到廣告主回報的轉換 → 寫 `conversions`（`ga4_status='pending'`）→ **立即回應廣告主**，不等 Google。
+2. `ads-maint.timer`（每分鐘 flush）批次送出（GA4 MP 單次最多 20 events），成功 → `ga4_status='sent'` + `ga4_sent_at`；失敗 → 指數退避重試，最多 3 次後標記 `failed` 並告警（走既有 `javis-alerts`）。
+3. 憑證：GA4 Property ID（javis `G-J8X3V9GXR4`、javid 另有一個）與**每個 data stream 的 API secret** → 存 `/srv/ads/.env`（600），**不進版控**。Property ID 可放 `settings`。
+
+**地理維度注意**：MP 事件來自 VPS（赫辛基），GA4 會把地理算在伺服器位置 → **GA4 的地理維度對廣告事件不可信**，一律以我們的 `ad_country` 與 first-party 報表為準。
+
+**降級**：GA4 不可用時，轉換照常記在我們自己的 `conversions` 與 `ad_counters` → 不影響投放與報表。
+
 ---
 
 ## 6. 尺寸與素材規格
@@ -357,7 +434,7 @@ impressions · clicks · conversions
 | 使用者 IP | 不寫入任何表；`CF-IPCountry` 由站方解析後只傳 ISO-2 代碼 |
 | 原始 UA | 站方解析成 `desktop/mobile/tablet/unknown` 後只傳 bucket；ad 服務收不到原始 UA |
 | Cookie / localStorage 識別碼 | 不使用；投放決策不依賴任何識別碼 |
-| 第三方請求 | 素材與跳轉同源；轉換 pixel 僅廣告主頁面會打（非本站流量） |
+| 第三方請求 | 素材與跳轉同源；轉換 pixel 僅廣告主頁面會打（非本站流量）。**唯一例外**：廣告轉換事件以 server-to-server 送到 GA4（見 §5.4），內容為事件名稱、廣告維度與合成 `client_id`，不含 IP/UA |
 | 跨域 referrer 外洩 | 素材同源；`Referrer-Policy: strict-origin-when-cross-origin`（站方既有政策） |
 | 精細位置 | 不使用經緯度 |
 | 跨站追蹤 | 兩站共用同一份廣告資料，但事件維度含 `placement_id`，不做個人級跨站關聯 |
@@ -375,7 +452,9 @@ impressions · clicks · conversions
 
 ### 7.5 隱私聲明對外文字
 
-javid 現有 `privacy/page.tsx` 需新增一段：「站內廣告為第一方自接，素材與點擊統計皆在本站同源完成，不使用第三方廣告網路、不寫入 Cookie、不儲存 IP；地理 targeting 僅使用 Cloudflare 提供的國家代碼。」
+javid 現有 `privacy/page.tsx`（與 javis 對應頁）需新增一段：
+
+> 站內廣告為第一方自接，素材與點擊統計皆在本站同源完成，不使用第三方廣告網路、不寫入 Cookie、不儲存 IP；地理 targeting 僅使用 Cloudflare 提供的國家代碼。廣告轉換事件會以 server-to-server 方式送出至 Google Analytics（僅事件名稱與廣告維度，不含 IP 或瀏覽器資訊）。
 
 ---
 
@@ -433,8 +512,10 @@ javid 現有 `privacy/page.tsx` 需新增一段：「站內廣告為第一方自
 ### 10.3 維運作業
 
 - 每日維護：session 清理、ad_counters 索引檢查、`ads.db` WAL checkpoint。
+- **每分鐘**：GA4 outbox flush（≤20 events/次，失敗退避重試 3 次後標記 failed 並告警）。
 - 備份：`ads-maint.timer` 觸發；失敗告警走既有 `javis-alerts` Cloudflare Worker（email）。
-- 每週報告：週報 email（管理員收），內容為上週各廣告曝光/點擊/點擊率/轉換。
+- 每週報告：週報 email（管理員收），內容為上週各廣告曝光/點擊/點擊率/轉換，並附上該週 CSV。
+- 可調設定（後台或 `settings` 表）：`cpm_floor_twd`（預設 30 TWD）、`targeting_timezone`（預設 `Asia/Taipei`）、`serve_cache_ttl_seconds`（預設 0）。
 
 ---
 
@@ -483,9 +564,17 @@ javid 現有 `privacy/page.tsx` 需新增一段：「站內廣告為第一方自
 ### 12.3 手動重建（非程式遷移）
 
 - [ ] 建立 house 廣告主「Viduck」
-- [ ] 建立活動 `Viduck A`／`Viduck B`（slot `javid:result-foot`、weight 1、`from 2026-10-19`、`to 2026-12-31`、active）
+- [ ] 建立活動 `Viduck A`／`Viduck B`（slot `javid:result-foot`、weight 1、`from 2026-10-19`、`to 2026-12-31`、active、`revenue_type='cpm'`、`revenue=30`、`currency='TWD'`）
 - [ ] 上傳素材：桌機 1280×400、手機 640×200（@2x 各 ×2）— 舊的 1940×500 不沿用
 - [ ] 連結沿用 `https://viduck.app/go/j-a-sm` / `j-b-sm`
+- [ ] 建立 tracker（若 Viduck 提供回呼或 pixel）→ 綁到對應活動
+
+### 12.4 隱私頁更新
+
+- [ ] javid `apps/site/app/privacy/page.tsx`：加入 §7.5 文字
+- [ ] javis 對應的隱私頁：加入 §7.5 文字
+- [ ] GA4 後台：註冊 event-scoped custom dimensions（`ad_campaign_id` / `ad_creative_id` / `ad_placement` / `ad_country` / `ad_tracker_id`），並把 `ad_conversion` 標記為 key event
+- [ ] GA4 後台：取得兩站各自的 data stream API secret → 寫入 `/srv/ads/.env`
 
 ---
 
@@ -520,6 +609,10 @@ javid 現有 `privacy/page.tsx` 需新增一段：「站內廣告為第一方自
 - [ ] 近 7/30 天切換
 - [ ] 跨站合計
 - [ ] CSV 匯出可被 Excel 開啟且數字與畫面一致
+- [ ] CPM 記帳：`value = 30 / 1000 × impressions`（TWD）、`ecpm = 30`、CSV 含 `currency=TWD`
+- [ ] `revenue` 低於 30（`cpm_floor_twd`）時後台拒收並提示
+- [ ] 未填 `revenue` 的廣告，value 仍以 30 起算（不為 0）
+- [ ] GA4：轉換事件 1 分鐘內出現在 GA4（`ad_conversion`），`ad_country` 與我們自己的判定一致
 
 **可靠性與安全**
 - [ ] ad 服務停止 → 站點版位整個不輸出、不留白框、頁面無 JS 錯誤
@@ -627,3 +720,5 @@ javid 現有 `privacy/page.tsx` 需新增一段：「站內廣告為第一方自
 | 24 | 排除運算子 | 納入 v1（not_in）＋時段/星期定向 |
 | 25 | 快取/除錯 | 納入 v1（serve 快取開關預設 0 ＋ debug log） |
 | 26 | 週報 | 納入 v1（email，每週一） |
+| 27 | 內部計價 | 納入 v1：**CPM，幣別 TWD，最低值 30**（`cpm_floor_twd`）；只做記帳統計，不影響選稿 |
+| 28 | GA4 整合 | 納入 v1（Measurement Protocol server-to-server；outbox 不阻塞請求；`client_id` 為合成值） |

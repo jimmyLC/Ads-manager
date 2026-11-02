@@ -65,8 +65,9 @@ CREATE TABLE IF NOT EXISTS campaigns (
   target_click          INTEGER,
   selection_strategy    TEXT NOT NULL DEFAULT 'weighted_random',
   bid_value             REAL,                           -- 預留，v1 不實作
-  revenue_type          TEXT,                           -- 預留：cpm | cpc | cpa | flat
-  revenue               REAL,                           -- 預留，v1 不實作
+  revenue_type          TEXT NOT NULL DEFAULT 'cpm',    -- cpm | cpc | cpa（flat v1 不支援）
+  revenue               REAL NOT NULL DEFAULT 30,       -- CPM 單價（TWD / 1000 次曝光），不得低於 settings.cpm_floor_twd
+  currency              TEXT NOT NULL DEFAULT 'TWD',    -- 幣別
   notes                 TEXT,
   created_at            INTEGER NOT NULL,
   updated_at            INTEGER NOT NULL,
@@ -197,6 +198,8 @@ CREATE INDEX IF NOT EXISTS idx_counters_placement_day ON ad_counters(placement_i
 
 -- ---------------------------------------------------------------------------
 -- 轉換明細（ad_counters.conversions 的來源）
+--   同時是 GA4 Measurement Protocol 的 outbox（見 SPEC §5.4）
+--   ga4_status: pending | sent | failed
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS conversions (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -204,9 +207,15 @@ CREATE TABLE IF NOT EXISTS conversions (
   day          TEXT NOT NULL,
   tracker_id   TEXT NOT NULL REFERENCES trackers(id) ON DELETE CASCADE,
   campaign_id  TEXT NOT NULL,
-  source       TEXT NOT NULL                     -- pixel | callback
+  source       TEXT NOT NULL,                    -- pixel | callback
+  click_id     TEXT,                             -- 預留：點擊歸因（見 SPEC §15），v1 不填
+  ga4_status   TEXT NOT NULL DEFAULT 'pending',  -- pending | sent | failed
+  ga4_sent_at  INTEGER,
+  ga4_attempts INTEGER NOT NULL DEFAULT 0,
+  ga4_error    TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_conversions_campaign_day ON conversions(campaign_id, day);
+CREATE INDEX IF NOT EXISTS idx_conversions_ga4_pending   ON conversions(ga4_status, id);
 
 -- ---------------------------------------------------------------------------
 -- 後台帳號與工作階段（不存 IP / UA）
@@ -275,4 +284,7 @@ INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES
   ('serve_cache_ttl_seconds', '0', 0),
   ('daily_impression_cap_default', '0', 0),
   ('asset_token_ttl_seconds', '600', 0),
-  ('targeting_timezone', 'Asia/Taipei', 0);
+  ('targeting_timezone', 'Asia/Taipei', 0),
+  ('cpm_floor_twd', '30', 0),                         -- CPM 最低值（TWD/1000 次曝光）
+  ('ga4_property_javis', 'G-J8X3V9GXR4', 0),          -- API secret 放 /srv/ads/.env，不進 DB
+  ('ga4_property_javid', '', 0);
