@@ -78,9 +78,13 @@ CREATE INDEX IF NOT EXISTS idx_campaigns_advertiser ON campaigns(advertiser_id);
 
 -- ---------------------------------------------------------------------------
 -- 定向條件
---   dimension: country | placement | device | path（path 保留、UI 未開放）
+--   dimension: country | placement | device | hour | weekday | path
+--              path    保留欄位，v1 UI 未開放
+--              hour    0..23（本地小時，依 settings.targeting_timezone 判定）
+--              weekday 1..7（ISO：1=週一 … 7=週日）
 --   operator : in | not_in | equals
 --   value    : 逗號分隔（in/not_in）或單值（equals）
+--   同一 dimension 可有多筆 → 全部必須命中（AND 語意）
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS targeting_rules (
   id           TEXT PRIMARY KEY,
@@ -270,4 +274,5 @@ INSERT OR IGNORE INTO advertisers (id, name, kind, contact, note, created_at, up
 INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES
   ('serve_cache_ttl_seconds', '0', 0),
   ('daily_impression_cap_default', '0', 0),
-  ('asset_token_ttl_seconds', '600', 0);
+  ('asset_token_ttl_seconds', '600', 0),
+  ('targeting_timezone', 'Asia/Taipei', 0);

@@ -135,7 +135,7 @@ advertisers ──1:N── campaigns ──1:N── creatives ──1:N── 
 | `placements` | 版位與其尺寸規格 | `id`（`javis:watch-below`）、`width_desktop`/`height_desktop`、`width_mobile`/`height_mobile`、`aspect`（`16/5`） |
 | `advertisers` | 廣告主（house/friendly） | `kind` |
 | `campaigns` | 活動 | `status`（draft/active/paused/ended）、`weight`、`starts_at`/`ends_at`、`daily_impression_cap`、`target_impression`/`target_click`、`selection_strategy`、`bid_value`、`revenue_type`/`revenue` |
-| `targeting_rules` | 定向條件 | `dimension`（country/placement/device/path）、`operator`（in/not_in/equals）、`value` |
+| `targeting_rules` | 定向條件 | `dimension`（country/placement/device/hour/weekday/path）、`operator`（in/not_in/equals）、`value` |
 | `campaign_placements` | 活動↔版位 | composite PK |
 | `creatives` | 素材 | `kind`（image/native/html）、native 欄位（headline/body/cta_label/cta_url/logo/thumb）、`html`、`alt_text` |
 | `creative_assets` | 素材檔變體 | `variant`（desktop/desktop@2x/mobile/mobile@2x）、`width`/`height`、`sha256`、`path` |
@@ -178,12 +178,15 @@ advertisers ──1:N── campaigns ──1:N── creatives ──1:N── 
    └─ (starts_at IS NULL OR starts_at ≤ now) AND (ends_at IS NULL OR ends_at ≥ now)
 
 3. 逐活動過濾（任一不符即排除）
-   a. targeting_rules：country / placement / device
+   a. targeting_rules：country / placement / device / hour / weekday
       · operator 'in'      → 值必須命中
       · operator 'not_in'  → 值不得命中
       · operator 'equals'  → 完全相等
+      · 同一 dimension 多筆 → 全部命中（AND 語意）
       · country 為 XX 時，任何 'country' 條件一律視為不符 → 該活動被排除
         （保守：寧可不投，不可亂投）
+      · hour / weekday 以 settings.targeting_timezone（預設 Asia/Taipei）判定；
+        hour = 0..23、weekday = 1..7（ISO，1=週一）
    b. 目標值已達：target_impression ≤ 今日累計曝光 或 target_click ≤ 累計點擊 → 排除
    c. 每日上限：daily_impression_cap ≤ 今日累計曝光 → 排除
 
@@ -506,7 +509,8 @@ javid 現有 `privacy/page.tsx` 需新增一段：「站內廣告為第一方自
 **規則**
 - [ ] `country` 條件：非目標國別不出
 - [ ] `not_in` 條件：被排除的版位不出
-- [ ] 時段/星期條件生效（若有設定）
+- [ ] `hour` 條件：非指定小時不出（時區 Asia/Taipei）
+- [ ] `weekday` 條件：非指定星期不出（ISO 1=週一…7=週日）
 - [ ] `from`/`to` 到期自動下架
 - [ ] 每日曝光上限生效（達上限後不出）
 - [ ] 目標值達標自動停
@@ -544,6 +548,7 @@ javid 現有 `privacy/page.tsx` 需新增一段：「站內廣告為第一方自
 | 國別來自 IP | VPN/Proxy 會失真 | 只到國別層級，失真影響小；`XX` 一律不投有國別條件的廣告 |
 | 站方解析 UA | 桌面瀏覽器縮窄視窗可能被判為 mobile（依 breakpoint 640px） | 兩站 breakpoint 一致 |
 | 素材備份每週 | 素材遺失最多回溯 7 天（素材可重上） | DB 每日備份 |
+| 轉換只歸因到 campaign，不歸因到單次點擊 | v1 的 tracker 直接綁 campaign，pixel 不帶點擊識別碼 → 無法算出「點擊→轉換」的時間差或單次點擊的轉換率 | 擴充點見 §15（加 `click_id`，仍不需 cookie） |
 
 ---
 
@@ -552,6 +557,8 @@ javid 現有 `privacy/page.tsx` 需新增一段：「站內廣告為第一方自
 - `selection_strategy`：`ctr_optimized`、`declared_value`（second price）— 欄位已留。
 - `revenue_type` / `revenue`：合作方按 CPM/CPC/固定價計算 — 欄位已留。
 - 細粒度 geo（MaxMind GeoLite2 離線 mmdb，國＋州省＋城市）— geo 模組介面已抽象。
+- **內部計價（若需要分帳）**：建議以 **CPM** 為唯一計價單位（曝光是我們唯一能穩定交付的量，點擊受攔截器與使用者行為影響、轉換需對方回報 → 適合當成效指標而非計價單位）。做法只是把 `campaigns.revenue_type='cpm'` 與 `revenue` 開起來，報表加「價值 = revenue/1000 × impressions」與 eCPM 欄位；不涉及扣款、發票、對帳流程。
+- **點擊歸因（click_id）**：點擊跳轉時附加隨機 `click_id`（不含個資、不設 cookie），廣告主回報轉換時帶回 → 可算出「點擊→轉換」時間差與單次點擊轉換率（對應 Revive 的 connection 模型）。
 - `path` 維度（頁面路徑條件）— 欄位已留，UI 未開放。
 - Channel（可重用定向規則集）。
 - 多站接入（新增 `sites`/`placements` 即可）。

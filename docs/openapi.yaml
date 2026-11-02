@@ -397,6 +397,6 @@ components:
             type: object
             required: [dimension, operator, value]
             properties:
-              dimension: { type: string, enum: [country, placement, device, path] }
+              dimension: { type: string, enum: [country, placement, device, hour, weekday, path] }
               operator: { type: string, enum: [in, not_in, equals] }
-              value: { type: string }
+              value: { type: string, description: '逗號分隔；hour=0..23、weekday=1..7(ISO,1=週一)、path=路徑前綴' }
