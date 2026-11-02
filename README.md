@@ -41,7 +41,7 @@
 
 ## 狀態
 
-規格已定案（v1.0）。實作分六個階段（見 SPEC §11）：**P0 已完成**（骨架、migration＋seed、後台登入／權限／稽核、活動建立與上下架），P1 起為投放 API。
+規格已定案（v1.0）。實作分六個階段（見 SPEC §11）：**P0 已完成**（骨架、migration＋seed、後台登入／權限／稽核、活動建立與上下架）；**P1 服務端已完成**（`/v1/serve|asset|out|conv|health`、素材上傳與驗證、定向規則、上線前素材檢查）。站方薄代理與 16/5 改版在 javis／javid 兩個 repo，尚未動。
 
 ## 開發
 
@@ -53,7 +53,8 @@ ADS_INSECURE_COOKIE=1 npm run dev  # http://127.0.0.1:9090/admin（正式環境�
 npm test
 ```
 
-P0 暫未做：TOTP 二因子、素材上傳、`/v1/*` 投放 API。
+尚未做：TOTP 二因子、站方薄代理（javis／javid repo）、報表／CSV／週報（P3）。
+正式環境需設 `APP_SECRET`（素材 token HMAC）；開發環境自動產生 `data/.dev-secret`。素材存放於 `ADS_ASSET_DIR`（預設 `data/assets`）。
 
 ## 授權
 

@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { getDb, now } from "./db.ts";
+import { creativeReady } from "./creatives.ts";
 
 export interface CampaignRow {
   id: string; name: string; status: string; weight: number; revenue: number; currency: string;
@@ -59,11 +60,17 @@ export function createCampaign(input: NewCampaign, actor: string): Result<string
   return { ok: true, value: id };
 }
 
-/** 狀態轉換：publish 需有可投放的素材（P1 起強制）；P0 先允許且 audit。 */
+/** 狀態轉換：上線時每個綁定版位都必須至少有一個齊備的素材。 */
 export function setStatus(id: string, to: "active" | "paused", actor: string): Result<string> {
   const db = getDb();
   const row = db.prepare("SELECT status FROM campaigns WHERE id = ?").get(id) as { status: string } | undefined;
   if (!row) return { ok: false, reason: "not_found" };
+  if (to === "active") {
+    const pls = db.prepare("SELECT placement_id FROM campaign_placements WHERE campaign_id = ?").all(id) as { placement_id: string }[];
+    const crs = db.prepare("SELECT * FROM creatives WHERE campaign_id = ? AND status = 'active' AND cta_url IS NOT NULL").all(id) as unknown as Parameters<typeof creativeReady>[0][];
+    if (!pls.length || !pls.every((p) => crs.some((c) => creativeReady(c, p.placement_id))))
+      return { ok: false, reason: "no_ready_creative" };
+  }
   const allowed = to === "active" ? ["draft", "paused"] : ["active"];
   if (!allowed.includes(row.status)) return { ok: false, reason: `invalid_transition_${row.status}_to_${to}` };
   db.prepare("UPDATE campaigns SET status = ?, updated_at = ?, updated_by = ? WHERE id = ?").run(to, now(), actor, id);

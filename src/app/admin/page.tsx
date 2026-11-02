@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 const ERRORS: Record<string, string> = {
   name_required: "請填名稱", revenue_below_floor: "CPM 單價低於最低值", bad_date_range: "結束時間早於開始時間",
-  placement_required: "請選擇版位", unknown_placement: "版位不存在", not_found: "找不到活動",
+  no_ready_creative: "每個版位都要至少一個齊備的素材才能上線", placement_required: "請選擇版位", unknown_placement: "版位不存在", not_found: "找不到活動",
 };
 const STATUS: Record<string, string> = { draft: "草稿", active: "投放中", paused: "已下架", ended: "已結束" };
 const fmt = (t: number | null) => (t ? new Date(t * 1000).toLocaleString("zh-TW", { timeZone: "Asia/Taipei", hour12: false }) : "不限");
@@ -31,7 +31,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
           <tbody>
             {rows.map((c) => (
               <tr key={c.id}>
-                <td>{c.name}<br /><code>{c.id}</code></td>
+                <td><a href={`/admin/ads/${c.id}`}>{c.name}</a><br /><code>{c.id}</code></td>
                 <td><span className={`pill ${c.status}`}>{STATUS[c.status] ?? c.status}</span></td>
                 <td>{c.placements ?? "—"}</td>
                 <td>{c.weight}</td>
