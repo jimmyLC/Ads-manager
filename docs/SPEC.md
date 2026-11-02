@@ -112,7 +112,7 @@ Revive Adserver（PHP/MariaDB）是最成熟的開源廣告伺服器，本系統
 
 ## 3. 資料模型
 
-SQLite（`node:sqlite`，WAL 模式）。單一寫入者＝Ads-manager 服務。完整 DDL 見 [`schema.sql`](./schema.sql)。
+SQLite（`node:sqlite`，WAL 模式）。單一寫入者＝Ads-manager 服務。完整 DDL 見 [`db/migrations/0001_init.sql`](../db/migrations/0001_init.sql)。
 
 ### 3.1 實體關係
 

@@ -21,7 +21,7 @@
 | 文件 | 內容 |
 |---|---|
 | [`docs/SPEC.md`](docs/SPEC.md) | 完整規格書（架構、資料模型、決策流程、API、尺寸、隱私、權限、上線階段、DoD 測試） |
-| [`docs/schema.sql`](docs/schema.sql) | SQLite schema 與種子資料 |
+| [`db/migrations/`](db/migrations/) | SQLite schema 與種子資料 |
 | [`docs/openapi.yaml`](docs/openapi.yaml) | API 契約（投放 `/v1/*` ＋ 管理 `/api/admin/*`） |
 | [`docs/RUNBOOK.md`](docs/RUNBOOK.md) | 運維手冊（部署、備份、排障、站方接入檢查表） |
 | [`docs/CREATIVE-SPEC.md`](docs/CREATIVE-SPEC.md) | 廣告素材規格（給合作方） |
@@ -41,7 +41,19 @@
 
 ## 狀態
 
-規格已定案（v1.0），**尚未實作**。預計分六個階段（見 SPEC §11）。
+規格已定案（v1.0）。實作分六個階段（見 SPEC §11）：**P0 已完成**（骨架、migration＋seed、後台登入／權限／稽核、活動建立與上下架），P1 起為投放 API。
+
+## 開發
+
+```bash
+npm install
+npm run db:migrate                 # 建立 data/ads.db（或設 ADS_DB_PATH）
+npm run user:create -- <名稱> admin   # 隱藏輸入密碼（至少 12 字元）
+ADS_INSECURE_COOKIE=1 npm run dev  # http://127.0.0.1:9090/admin（正式環境走 HTTPS，不要設 ADS_INSECURE_COOKIE）
+npm test
+```
+
+P0 暫未做：TOTP 二因子、素材上傳、`/v1/*` 投放 API。
 
 ## 授權
 

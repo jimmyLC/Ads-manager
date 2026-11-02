@@ -18,7 +18,7 @@ cd /srv/ads/app
 npm ci
 npm run build
 
-# 3. 初始化 DB（會套用 docs/schema.sql 的 schema 與種子）
+# 3. 初始化 DB（會套用 db/migrations/ 的 schema 與種子）
 node scripts/migrate.mjs
 
 # 4. 素材目錄

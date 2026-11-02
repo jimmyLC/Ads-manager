@@ -1,0 +1,25 @@
+{
+  "name": "ads-manager",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev -p 9090 -H 127.0.0.1",
+    "build": "next build",
+    "start": "next start -p 9090 -H 127.0.0.1",
+    "db:migrate": "node scripts/migrate.mjs",
+    "user:create": "node scripts/create-user.mjs",
+    "test": "node --test test/"
+  },
+  "dependencies": {
+    "next": "^16.4.4",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "typescript": "^7.0.2"
+  }
+}
