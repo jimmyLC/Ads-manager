@@ -1,0 +1,17 @@
+:root { color-scheme: light dark; --bg:#fafafa; --fg:#1a1a1a; --mut:#666; --line:#ddd; --acc:#2563eb; --bad:#b91c1c; }
+@media (prefers-color-scheme: dark) { :root { --bg:#111; --fg:#eee; --mut:#999; --line:#333; --acc:#60a5fa; --bad:#f87171; } }
+body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.5 system-ui,-apple-system,"PingFang TC",sans-serif; }
+main { max-width:960px; margin:0 auto; padding:24px 16px; }
+nav { display:flex; gap:16px; align-items:center; border-bottom:1px solid var(--line); padding-bottom:12px; margin-bottom:20px; }
+nav .sp { flex:1; }
+a { color:var(--acc); }
+table { width:100%; border-collapse:collapse; }
+th,td { text-align:left; padding:8px 6px; border-bottom:1px solid var(--line); vertical-align:top; }
+th { color:var(--mut); font-weight:500; font-size:13px; }
+input,select,button { font:inherit; padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:transparent; color:inherit; }
+button { cursor:pointer; } button.primary { background:var(--acc); border-color:var(--acc); color:#fff; }
+form.inline { display:inline; } .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px; margin:12px 0; }
+label { display:flex; flex-direction:column; gap:4px; font-size:13px; color:var(--mut); }
+.err { color:var(--bad); } .pill { padding:2px 8px; border:1px solid var(--line); border-radius:99px; font-size:12px; }
+.pill.active { color:#15803d; border-color:#15803d; } .pill.paused { color:#b45309; border-color:#b45309; }
+.scroll { overflow-x:auto; } code { font-size:13px; }

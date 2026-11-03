@@ -18,7 +18,7 @@ cd /srv/ads/app
 npm ci
 npm run build
 
-# 3. 初始化 DB（會套用 docs/schema.sql 的 schema 與種子）
+# 3. 初始化 DB（會套用 db/migrations/ 的 schema 與種子）
 node scripts/migrate.mjs
 
 # 4. 素材目錄
@@ -217,3 +217,13 @@ sqlite3 /tmp/restore_test.db "SELECT COUNT(*) FROM ad_counters;"
 - [ ] 渲染時固定高度 + `aspect-ratio: 16/5` → CLS = 0
 - [ ] ad 服務不可用時，版位整個不輸出（不留白框）
 - [ ] 兩站樣式：`rel="sponsored nofollow noopener"`、`target="_blank"`
+
+## 附：報表與排程指令（P3）
+
+| 指令 | 用途 | 建議排程 |
+|---|---|---|
+| `npm run maint` | 到期／達目標的活動標為 ended、清過期 session、WAL checkpoint | 每日 04:40 UTC（`ads-maint.timer`） |
+| `npm run report:weekly [-- --out <dir>]` | 產出上一個完整週（週一至週日，UTC）的 CSV 與文字摘要，預設放 `data/outbox/` | 每週一 |
+| `npm run blocker-check` | 對照四份廣告攔截清單，確認版位不被擋（見 `tools/blocker-check/`） | 改版位命名後 |
+
+週報目前只產生檔案；寄信管道（例如走既有 `javis-alerts`）尚未接上。報表日界為 UTC，與台北差 8 小時。

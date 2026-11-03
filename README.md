@@ -21,7 +21,7 @@
 | 文件 | 內容 |
 |---|---|
 | [`docs/SPEC.md`](docs/SPEC.md) | 完整規格書（架構、資料模型、決策流程、API、尺寸、隱私、權限、上線階段、DoD 測試） |
-| [`docs/schema.sql`](docs/schema.sql) | SQLite schema 與種子資料 |
+| [`db/migrations/`](db/migrations/) | SQLite schema 與種子資料 |
 | [`docs/openapi.yaml`](docs/openapi.yaml) | API 契約（投放 `/v1/*` ＋ 管理 `/api/admin/*`） |
 | [`docs/RUNBOOK.md`](docs/RUNBOOK.md) | 運維手冊（部署、備份、排障、站方接入檢查表） |
 | [`docs/CREATIVE-SPEC.md`](docs/CREATIVE-SPEC.md) | 廣告素材規格（給合作方） |
@@ -41,7 +41,21 @@
 
 ## 狀態
 
-規格已定案（v1.0），**尚未實作**。預計分六個階段（見 SPEC §11）。
+規格已定案（v1.0）。實作分六個階段（見 SPEC §11）：**P0 已完成**（骨架、migration＋seed、後台登入／權限／稽核、活動建立與上下架）；**P1 服務端已完成**（`/v1/serve|asset|out|conv|health`、素材上傳與驗證、定向規則、上線前素材檢查）。站方薄代理與 16/5 改版在 javis／javid 兩個 repo，尚未動。
+
+## 開發
+
+```bash
+npm install
+npm run db:migrate                 # 建立 data/ads.db（或設 ADS_DB_PATH）
+npm run user:create -- <名稱> admin   # 隱藏輸入密碼（至少 12 字元）
+ADS_INSECURE_COOKIE=1 npm run dev  # http://127.0.0.1:9090/admin（正式環境走 HTTPS，不要設 ADS_INSECURE_COOKIE）
+npm test
+```
+
+**P3 已完成**：報表（`/admin/reports`、`/api/admin/stats`、`/api/admin/stats.csv`，日期×活動×版位×國別×裝置×站，跨站合計，CPM 記帳）、每日維護 `npm run maint`（到期或達目標的活動標為 ended）、週報 `npm run report:weekly`（輸出 CSV 與摘要到 `data/outbox/`）。
+尚未做：TOTP 二因子、週報寄信（待決定寄信管道）、GA4 outbox（SPEC §5.4）、活動／素材的修改與刪除。站方薄代理已在 javis／javid 兩個 repo 各開本機分支（未推送、未部署）。
+正式環境需設 `APP_SECRET`（素材 token HMAC）；開發環境自動產生 `data/.dev-secret`。素材存放於 `ADS_ASSET_DIR`（預設 `data/assets`）。
 
 ## 授權
 
