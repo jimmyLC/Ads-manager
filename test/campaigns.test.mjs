@@ -107,7 +107,8 @@ test("limits: schedule window, daily cap, click target", () => {
   assert.equal(ok(), false);
   set("UPDATE campaigns SET starts_at = NULL WHERE id='cp_viduck_javis'");
   assert.equal(ok(), true);
-  const imp = db.prepare("SELECT COALESCE(SUM(impressions),0) n FROM ad_counters WHERE campaign_id='cp_viduck_javis'").get().n;
+  // 每日上限只看「今天（UTC）」的曝光；前面帶 now 參數的測試會把曝光記到別天，不能算進來
+  const imp = db.prepare("SELECT COALESCE(SUM(impressions),0) n FROM ad_counters WHERE campaign_id='cp_viduck_javis' AND day = ?").get(new Date().toISOString().slice(0, 10)).n;
   set("UPDATE campaigns SET daily_impression_cap = ? WHERE id='cp_viduck_javis'", imp);
   assert.equal(ok(), false);
   set("UPDATE campaigns SET daily_impression_cap = NULL, target_click = 1 WHERE id='cp_viduck_javis'");

@@ -10,7 +10,9 @@
     "db:migrate": "node scripts/migrate.mjs",
     "user:create": "node scripts/create-user.mjs",
     "test": "node --test test/",
-    "blocker-check": "node tools/blocker-check/check.mts"
+    "blocker-check": "node tools/blocker-check/check.mts",
+    "maint": "node scripts/maint.mjs",
+    "report:weekly": "node scripts/weekly-report.mjs"
   },
   "dependencies": {
     "next": "^16.4.4",
