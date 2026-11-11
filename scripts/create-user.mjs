@@ -35,8 +35,8 @@ function ask(prompt) {
   });
 }
 
-const pw = process.env.ADS_NEW_PASSWORD ?? (await ask("密碼（至少 12 字元）："));
-if (pw.length < 12) {
+const pw = process.env.ADS_NEW_PASSWORD ?? (await ask("密碼（至少 8 字元）："));
+if (pw.length < 8) {
   console.error("密碼太短");
   process.exit(1);
 }
