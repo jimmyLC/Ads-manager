@@ -40,5 +40,10 @@ export function guard(req: Request, role: Role = "viewer"): Guard {
 export function respond(req: Request, back: string, json: unknown, status = 200): NextResponse {
   if ((req.headers.get("accept") ?? "").includes("application/json") || (req.headers.get("content-type") ?? "").includes("json"))
     return NextResponse.json(json, { status });
-  return NextResponse.redirect(new URL(back, req.url), 303);
+  return seeOther(back);
+}
+
+/** 303 到站內相對路徑。不用 req.url：在 tunnel 後面它是 127.0.0.1:9090。 */
+export function seeOther(path: string): NextResponse {
+  return new NextResponse(null, { status: 303, headers: { location: path } });
 }

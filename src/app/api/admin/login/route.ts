@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { login, sessionCookie } from "@/lib/auth.ts";
 import { audit } from "@/lib/audit.ts";
-import { readBody, sameOrigin } from "@/lib/http.ts";
+import { readBody, sameOrigin, seeOther } from "@/lib/http.ts";
 
 export async function POST(req: Request) {
   if (!sameOrigin(req)) return NextResponse.json({ ok: false, reason: "bad_origin" }, { status: 403 });
@@ -9,10 +9,10 @@ export async function POST(req: Request) {
   const result = await login(username, password);
   if (!result) {
     audit(username || "?", "login_failed", "user", username || "?");
-    return NextResponse.redirect(new URL("/admin/login?error=1", req.url), 303);
+    return seeOther("/admin/login?error=1");
   }
   audit(result.user.username, "login", "user", result.user.id);
-  const res = NextResponse.redirect(new URL("/admin", req.url), 303);
+  const res = seeOther("/admin");
   res.headers.append("set-cookie", sessionCookie(result.token));
   return res;
 }
